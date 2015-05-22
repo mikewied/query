@@ -18,6 +18,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+    "runtime/debug"
 
 	"github.com/couchbase/query/errors"
 	"github.com/couchbase/query/execution"
@@ -320,6 +321,20 @@ func (this *httpRequest) writeMetrics(metrics bool) bool {
 		this.writeString(fmt.Sprintf(",\n        \"executionTime\": \"%v\"", ts)) &&
 		this.writeString(fmt.Sprintf(",\n        \"resultCount\": %d", this.resultCount)) &&
 		this.writeString(fmt.Sprintf(",\n        \"resultSize\": %d", this.resultSize))
+
+    phaseTimes := this.PhaseTimes()
+	for k, v := range phaseTimes {
+        this.writeString(fmt.Sprintf(",\n        \"%s\": \"%v\"", k, v))
+	}
+
+    var stats debug.GCStats
+    debug.ReadGCStats(&stats)
+
+    if stats.LastGC.After(this.RequestTime()) {
+        this.writeString(fmt.Sprintf(",\n        \"garbageCollection\": true"))
+    } else {
+        this.writeString(fmt.Sprintf(",\n        \"garbageCollection\": false"))
+    }
 
 	if this.MutationCount() > 0 {
 		rv = rv && this.writeString(fmt.Sprintf(",\n        \"mutationCount\": %d", this.MutationCount()))

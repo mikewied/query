@@ -149,10 +149,12 @@ func (this *Server) serviceRequest(request Request) {
 		namespace = this.namespace
 	}
 
-	prepared, err := this.getPrepared(request, namespace)
+    timer := time.Now()
+    prepared, err := this.getPrepared(request, namespace)
 	if err != nil {
 		request.Fail(err)
 	}
+    parse_stmt_time := time.Since(timer)
 
 	if (this.readonly || value.ToBool(request.Readonly())) &&
 		(prepared != nil && !prepared.Readonly()) {
@@ -188,7 +190,11 @@ func (this *Server) serviceRequest(request Request) {
 	context := execution.NewContext(this.datastore, this.systemstore, namespace,
 		this.readonly, maxParallelism, request.NamedArgs(), request.PositionalArgs(),
 		request.Credentials(), request.ScanConsistency(), request.ScanVector(), request.Output())
-	operator.RunOnce(context, nil)
+    context.AddPhaseTime("stmt_parsing", parse_stmt_time)
+
+    timer = time.Now()
+    operator.RunOnce(context, nil)
+    context.AddPhaseTime("stmt_execution", time.Since(timer))
 
 	if logging.LogLevel() >= logging.Trace {
 		logPhases(request)

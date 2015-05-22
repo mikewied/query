@@ -50,12 +50,14 @@ func (this *IndexScan) Copy() Operator {
 
 func (this *IndexScan) RunOnce(context *Context, parent value.Value) {
 	this.once.Do(func() {
+        timer := time.Now()
 		defer context.Recover()       // Recover from any panic
 		defer close(this.itemChannel) // Broadcast that I have stopped
 		defer this.notify()           // Notify that I have stopped
 
 		spans := this.plan.Spans()
 		n := len(spans)
+
 		this.childChannel = make(StopChannel, n)
 		children := make([]Operator, n)
 		for i, span := range spans {
@@ -80,6 +82,7 @@ func (this *IndexScan) RunOnce(context *Context, parent value.Value) {
 				notifyChildren(children...)
 			}
 		}
+        context.AddPhaseTime("index_scan", time.Since(timer))
 	})
 }
 
@@ -119,12 +122,11 @@ func (this *spanScan) RunOnce(context *Context, parent value.Value) {
 		defer close(this.itemChannel) // Broadcast that I have stopped
 		defer this.notify()           // Notify that I have stopped
 
+        timer := time.Now()
 		conn := datastore.NewIndexConnection(context)
 		defer notifyConn(conn) // Notify index that I have stopped
 
 		var duration time.Duration
-		timer := time.Now()
-		defer context.AddPhaseTime("scan", time.Since(timer)-duration)
 
 		go this.scan(context, conn)
 
@@ -153,6 +155,7 @@ func (this *spanScan) RunOnce(context *Context, parent value.Value) {
 				return
 			}
 		}
+        context.AddPhaseTime("scan", time.Since(timer))
 	})
 }
 

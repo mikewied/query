@@ -11,6 +11,7 @@ package execution
 
 import (
 	_ "fmt"
+    "time"
 
 	"github.com/couchbase/query/errors"
 	"github.com/couchbase/query/plan"
@@ -43,13 +44,14 @@ func (this *KeyScan) Copy() Operator {
 
 func (this *KeyScan) RunOnce(context *Context, parent value.Value) {
 	this.once.Do(func() {
+        timer := time.Now()
 		defer context.Recover()       // Recover from any panic
 		defer close(this.itemChannel) // Broadcast that I have stopped
 		defer this.notify()           // Notify that I have stopped
-
 		keys, e := this.plan.Keys().Evaluate(parent, context)
 		if e != nil {
 			context.Error(errors.NewEvaluationError(e, "KEYS"))
+            context.AddPhaseTime("key_scan", time.Since(timer))
 			return
 		}
 
@@ -69,8 +71,10 @@ func (this *KeyScan) RunOnce(context *Context, parent value.Value) {
 			av := value.NewAnnotatedValue(cv)
 			av.SetAttachment("meta", map[string]interface{}{"id": key})
 			if !this.sendItem(av) {
+                context.AddPhaseTime("key_scan", time.Since(timer))
 				return
 			}
 		}
+        context.AddPhaseTime("key_scan", time.Since(timer))
 	})
 }
